@@ -33,11 +33,9 @@ import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
-import android.media.ExifInterface;
 
 import org.apache.cordova.LOG;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.Exception;
@@ -360,7 +358,10 @@ public class CameraActivity extends Fragment {
     return getActivity().getApplicationContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_FRONT);
   }
 
-  public static Bitmap applyMatrix(Bitmap source, Matrix matrix) {
+  public static Bitmap flipBitmap(Bitmap source) {
+    Matrix matrix = new Matrix();
+    matrix.preScale(1.0f, -1.0f);
+
     return Bitmap.createBitmap(source, 0, 0, source.getWidth(), source.getHeight(), matrix, true);
   }
 
@@ -370,35 +371,15 @@ public class CameraActivity extends Fragment {
     }
   };
 
-  private static int exifToDegrees(int exifOrientation) {
-    if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_90) { return 90; }
-    else if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_180) {  return 180; }
-    else if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_270) {  return 270; }
-    return 0;
-  }
-
   PictureCallback jpegPictureCallback = new PictureCallback(){
     public void onPictureTaken(byte[] data, Camera arg1){
       Log.d(TAG, "CameraPreview jpegPictureCallback");
 
       try {
-        Matrix matrix = new Matrix();
-        if (cameraCurrentlyLocked == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-          matrix.preScale(1.0f, -1.0f);
-        }
 
-        ExifInterface exifInterface = new ExifInterface(new ByteArrayInputStream(data));
-        int rotation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
-        int rotationInDegrees = exifToDegrees(rotation);
-
-        if (rotation != 0f) {
-          matrix.preRotate(rotationInDegrees);
-        }
-
-        // Check if matrix has changed. In that case, apply matrix and override data
-        if (!matrix.isIdentity()) {
+        if(cameraCurrentlyLocked == Camera.CameraInfo.CAMERA_FACING_FRONT) {
           Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-          bitmap = applyMatrix(bitmap, matrix);
+          bitmap = flipBitmap(bitmap);
 
           ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
           bitmap.compress(Bitmap.CompressFormat.JPEG, currentQuality, outputStream);
@@ -414,9 +395,6 @@ public class CameraActivity extends Fragment {
         Log.d(TAG, "CameraPreview OutOfMemoryError");
         // failed to allocate memory
         eventListener.onPictureTakenError("Picture too large (memory)");
-      } catch (IOException e) {
-        Log.d(TAG, "CameraPreview IOException");
-        eventListener.onPictureTakenError("IO Error when extracting exif");
       } catch (Exception e) {
         Log.d(TAG, "CameraPreview onPictureTaken general exception");
       } finally {
